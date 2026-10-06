@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Google Flow — Admin Dashboard</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#121826; --panel2:#182135; --border:#253047;
+    --text:#e8edf7; --muted:#8a93a8; --accent:#5b8cff; --accent2:#7c5bff;
+    --green:#2ecc71; --red:#ff5c5c; --yellow:#ffb84d;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  a{color:var(--accent);}
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;padding:14px 24px;
+    background:linear-gradient(90deg,var(--panel),var(--panel2));border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:50;
+  }
+  header.top h1{font-size:18px;margin:0;display:flex;align-items:center;gap:10px;}
+  header.top h1 .logo{width:28px;height:28px;border-radius:8px;background:conic-gradient(from 90deg,var(--accent),var(--accent2),var(--accent));display:inline-block;}
+  .top-right{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted);}
+  .pill{padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--border);font-size:12px;}
+  .pill.ok{color:var(--green);border-color:#1f5c3d;}
+  .pill.bad{color:var(--red);border-color:#5c1f1f;}
+  input.token-input{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:12px;width:170px;}
+
+  nav.tabs{display:flex;gap:4px;padding:10px 24px 0;background:var(--bg);border-bottom:1px solid var(--border);overflow-x:auto;}
+  nav.tabs button{
+    background:transparent;border:none;color:var(--muted);padding:10px 16px;font-size:14px;cursor:pointer;
+    border-bottom:2px solid transparent;white-space:nowrap;
+  }
+  nav.tabs button.active{color:var(--text);border-color:var(--accent);}
+  nav.tabs button:hover{color:var(--text);}
+
+  main{padding:24px;max-width:1300px;margin:0 auto;}
+  .tabview{display:none;}
+  .tabview.active{display:block;animation:fade .2s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .grid{display:grid;gap:16px;}
+  .grid.cols-4{grid-template-columns:repeat(4,1fr);}
+  .grid.cols-2{grid-template-columns:1.2fr .8fr;}
+  @media (max-width:900px){.grid.cols-4{grid-template-columns:repeat(2,1fr);} .grid.cols-2{grid-template-columns:1fr;}}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+  .card h3{margin:0 0 6px;font-size:13px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+  .card .big{font-size:28px;font-weight:700;}
+  .card.section{margin-bottom:18px;}
+  .card.section h2{margin:0 0 14px;font-size:16px;}
+
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;margin-top:12px;}
+  input[type=text], input[type=email], input[type=password], textarea, select{
+    width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    padding:9px 11px;border-radius:8px;font-size:14px;font-family:inherit;
+  }
+  textarea{resize:vertical;min-height:90px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row > *{flex:1;min-width:160px;}
+
+  button.btn{
+    background:var(--accent);color:white;border:none;padding:10px 16px;border-radius:8px;
+    font-size:14px;cursor:pointer;font-weight:600;
+  }
+  button.btn:hover{opacity:.9;}
+  button.btn.secondary{background:var(--panel2);border:1px solid var(--border);color:var(--text);}
+  button.btn.danger{background:var(--red);}
+  button.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;font-size:12px;}
+  button.btn.small{padding:6px 10px;font-size:12px;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{padding:9px 10px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+  th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.03em;}
+  tr:hover td{background:rgba(255,255,255,.02);}
+  .table-wrap{overflow-x:auto;}
+
+  .badge{padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;display:inline-block;}
+  .badge.logged_in{background:#163a27;color:var(--green);}
+  .badge.idle{background:#2a2f3d;color:var(--muted);}
+  .badge.logging_in,.badge.busy{background:#2a2a16;color:var(--yellow);}
+  .badge.needs_manual{background:#3a2a16;color:#ffb84d;}
+  .badge.error{background:#3a1616;color:var(--red);}
+  .badge.queued{background:#1d2740;color:#7fa6ff;}
+  .badge.running{background:#2a2a16;color:var(--yellow);}
+  .badge.done{background:#163a27;color:var(--green);}
+  .badge.healthy{background:#163a27;color:var(--green);}
+  .badge.warning{background:#3a2a16;color:var(--yellow);}
+  .badge.dead{background:#3a1616;color:var(--red);}
+
+  .progress{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;border:1px solid var(--border);}
+  .progress > div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s ease;}
+
+  .tabs-inline{display:flex;gap:8px;margin-bottom:14px;}
+  .tabs-inline button{background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;}
+  .tabs-inline button.active{background:var(--accent);color:white;border-color:var(--accent);}
+
+  .cctv-wrap{background:#000;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);position:relative;}
+  #cctvImg{width:100%;display:block;cursor:crosshair;background:#000;min-height:360px;}
+  .cctv-overlay{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:6px;font-size:12px;}
+  .cctv-controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+
+  .muted{color:var(--muted);}
+  .small{font-size:12px;}
+  .flex-between{display:flex;align-items:center;justify-content:space-between;}
+  .mt8{margin-top:8px;}
+  .mt16{margin-top:16px;}
+  code.inline{background:var(--panel2);padding:2px 6px;border-radius:5px;font-size:12px;}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:30px 0;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1><span class="logo"></span> Google Flow — Admin Dashboard</h1>
+  <div class="top-right">
+    <span id="socketStatus" class="pill bad">● disconnected</span>
+    <span id="queueStat" class="pill">queue: 0/0</span>
+    <input class="token-input" id="tokenInput" type="text" placeholder="x-admin-token (opsional)" />
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="dashboard">📊 Dashboard</button>
+  <button class="tab-btn" data-tab="accounts">👤 Akun & Login</button>
+  <button class="tab-btn" data-tab="cctv">📹 CCTV Monitor</button>
+  <button class="tab-btn" data-tab="bulk">⚡ Bulk Generator</button>
+  <button class="tab-btn" data-tab="tasks">📦 Tasks & Export</button>
+</nav>
+
+<main>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <section id="tab-dashboard" class="tabview active">
+    <div class="grid cols-4">
+      <div class="card"><h3>Total Akun</h3><div class="big" id="statAccounts">0</div></div>
+      <div class="card"><h3>Akun Sehat</h3><div class="big" id="statHealthy">0</div></div>
+      <div class="card"><h3>Task Berjalan</h3><div class="big" id="statRunning">0</div></div>
+      <div class="card"><h3>Task Selesai</h3><div class="big" id="statDone">0</div></div>
+    </div>
+
+    <div class="card section mt16">
+      <h2>Queue Engine</h2>
+      <p class="muted small">Concurrency dikontrol di server (env <code class="inline">CONCURRENCY</code>) agar generasi 100 video/musik tidak memicu Out-of-Memory di Railway.</p>
+      <div id="queueDetail" class="small muted">running: 0 · waiting: 0 · concurrency: 0</div>
+    </div>
+
+    <div class="card section">
+      <h2>Aktivitas Task Terbaru</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Prompt</th><th>Akun</th><th>Status</th><th>Progress</th><th>Dibuat</th></tr></thead>
+          <tbody id="recentTasksBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ACCOUNTS ===================== -->
+  <section id="tab-accounts" class="tabview">
+    <div class="grid cols-2">
+      <div class="card section">
+        <h2>➕ Tambah / Login Akun</h2>
+        <div class="tabs-inline">
+          <button class="login-mode-btn active" data-mode="auto">Login Otomatis (Email/Password)</button>
+          <button class="login-mode-btn" data-mode="cookie">Injeksi Cookie Manual (JSON)</button>
+        </div>
+
+        <div id="loginModeAuto">
+          <label>Label Akun</label>
+          <input type="text" id="autoLabel" placeholder="Akun Utama 1" />
+          <label>Email Google</label>
+          <input type="email" id="autoEmail" placeholder="user@gmail.com" />
+          <label>Password</label>
+          <input type="password" id="autoPassword" placeholder="••••••••" />
+          <p class="small muted mt8">Puppeteer Stealth akan login otomatis. Jika Google menampilkan 2FA/Captcha, buka tab <b>CCTV Monitor</b> untuk menyelesaikannya secara manual via remote-control.</p>
+          <button class="btn mt8" id="btnAutoLogin">🔐 Login Otomatis</button>
+        </div>
+
+        <div id="loginModeCookie" style="display:none;">
+          <label>Label Akun</label>
+          <input type="text" id="cookieLabel" placeholder="Akun Cookie 1" />
+          <label>Email (opsional)</label>
+          <input type="email" id="cookieEmail" placeholder="user@gmail.com" />
+          <label>Paste JSON Cookie</label>
+          <textarea id="cookieText" placeholder='[{"name":"SID","value":"...","domain":".google.com"}, ...]'></textarea>
+          <label>atau Upload File Cookie (.json)</label>
+          <input type="file" id="cookieFile" accept=".json" />
+          <button class="btn mt8" id="btnCookieLogin">💉 Inject Cookie & Verifikasi</button>
+        </div>
+
+        <div id="loginResult" class="small mt16"></div>
+      </div>
+
+      <div class="card section">
+        <h2>ℹ️ Algoritma Rotasi Akun</h2>
+        <p class="small muted">Setiap request <code class="inline">/api/v1/flow/generate</code> tanpa <code class="inline">accountId</code> akan otomatis memilih akun dengan status <code class="inline">logged_in</code>, kesehatan bukan <code class="inline">dead</code>, dan sisa kuota terbanyak (round-robin berdasarkan <code class="inline">lastUsed</code>).</p>
+        <h2 class="mt16">📤 Ekstraksi Cookie/Session</h2>
+        <p class="small muted">Klik "Export Cookie" pada baris tabel akun untuk mengunduh <code class="inline">acc_&lt;id&gt;.json</code> langsung dari <code class="inline">./sessions/</code>.</p>
+      </div>
+    </div>
+
+    <div class="card section">
+      <h2>📋 Daftar Akun</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Label</th><th>Email</th><th>Metode</th><th>Status</th><th>Health</th><th>Kuota</th><th>Terakhir Dipakai</th><th>Aksi</th></tr>
+          </thead>
+          <tbody id="accountsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CCTV ===================== -->
+  <section id="tab-cctv" class="tabview">
+    <div class="grid cols-2">
+      <div class="card section">
+        <h2>📹 CCTV Live Monitor</h2>
+        <label>Pilih Akun</label>
+        <select id="cctvAccountSelect"></select>
+        <div class="cctv-wrap mt16">
+          <img id="cctvImg" alt="CCTV stream akan tampil di sini" />
+          <div class="cctv-overlay" id="cctvOverlay">tidak terhubung</div>
+        </div>
+        <div class="cctv-controls">
+          <button class="btn secondary small" id="btnCctvStart">▶ Start Stream</button>
+          <button class="btn secondary small" id="btnCctvStop">⏸ Stop Stream</button>
+          <button class="btn secondary small" id="btnCctvEnter">⏎ Enter</button>
+          <button class="btn secondary small" id="btnCctvEsc">Esc</button>
+          <button class="btn secondary small" id="btnCctvTab">Tab</button>
+        </div>
+        <p class="small muted mt8">Klik langsung di atas gambar untuk mengirim klik mouse ke browser Puppeteer (berguna untuk melewati Cloudflare / verifikasi manual).</p>
+      </div>
+
+      <div class="card section">
+        <h2>🎛 Remote Control</h2>
+        <label>Ketik teks ke halaman aktif</label>
+        <div class="row">
+          <input type="text" id="cctvTypeText" placeholder="ketik teks lalu kirim..." />
+          <button class="btn small" id="btnCctvType">Kirim Teks</button>
+        </div>
+        <label>Navigasi cepat (URL)</label>
+        <div class="row">
+          <input type="text" id="cctvGotoUrl" placeholder="https://labs.google/fx/tools/flow" />
+          <button class="btn small secondary" id="btnCctvGoto">Buka URL</button>
+        </div>
+        <div id="cctvLog" class="small muted mt16" style="max-height:220px;overflow:auto;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== BULK GENERATOR ===================== -->
+  <section id="tab-bulk" class="tabview">
+    <div class="card section">
+      <h2>⚡ Bulk Generate Engine (maks. 100 prompt)</h2>
+      <label>Pilih Akun (kosongkan untuk rotasi otomatis)</label>
+      <select id="bulkAccountSelect"><option value="">— Rotasi Otomatis —</option></select>
+
+      <label>Daftar Prompt (satu per baris, maks 100)</label>
+      <textarea id="bulkPrompts" style="min-height:160px;" placeholder="Prompt 1: a cat surfing on a wave, cinematic
+Prompt 2: ...
+Prompt 3: ..."></textarea>
+
+      <label>Atau Upload File (.csv / .json / .txt)</label>
+      <input type="file" id="bulkFile" accept=".csv,.json,.txt" />
+
+      <button class="btn mt16" id="btnBulkSubmit">🚀 Jalankan Bulk Generate</button>
+      <span id="bulkCount" class="small muted" style="margin-left:10px;"></span>
+    </div>
+
+    <div class="card section" id="bulkProgressCard" style="display:none;">
+      <div class="flex-between">
+        <h2 style="margin:0;">Progress Batch <span id="bulkBatchId" class="muted small"></span></h2>
+        <span id="bulkPercentLabel" class="small">0%</span>
+      </div>
+      <div class="progress mt8"><div id="bulkProgressBar" style="width:0%"></div></div>
+      <div class="table-wrap mt16">
+        <table>
+          <thead><tr><th>#</th><th>Prompt</th><th>Status</th><th>Progress</th><th>Akun</th><th>Aksi</th></tr></thead>
+          <tbody id="bulkTasksBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TASKS & EXPORT ===================== -->
+  <section id="tab-tasks" class="tabview">
+    <div class="card section">
+      <div class="flex-between">
+        <h2 style="margin:0;">📦 Semua Task</h2>
+        <div class="row" style="flex:0 0 auto;gap:8px;">
+          <button class="btn secondary" id="btnExportAllJson">⬇ Download All Metadata JSON</button>
+          <button class="btn secondary" id="btnExportAllMedia">⬇ Download All Media (ZIP)</button>
+          <button class="btn ghost" id="btnRefreshTasks">⟳ Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap mt16">
+        <table>
+          <thead><tr><th>Prompt</th><th>Akun</th><th>Status</th><th>Progress</th><th>Media</th><th>Aksi</th></tr></thead>
+          <tbody id="allTasksBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer>Google Flow Admin Dashboard &middot; Express + Socket.io + Puppeteer-Extra Stealth &middot; Deploy-ready untuk Railway.app</footer>
+</main>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+// ---------- Token handling ----------
+const tokenInput = $('#tokenInput');
+tokenInput.value = localStorage.getItem('adminToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('adminToken', tokenInput.value));
+
+async function api(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers || {});
+  const token = localStorage.getItem('adminToken');
+  if (token) headers['x-admin-token'] = token;
+  if (opts.body && !(opts.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(path, Object.assign({}, opts, { headers }));
+  let data;
+  try { data = await res.json(); } catch (e) { data = { ok: res.ok }; }
+  return data;
+}
+
+// ---------- Tabs ----------
+$$('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('.tab-btn').forEach(b => b.classList.remove('active'));
+    $$('.tabview').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    $('#tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+$$('.login-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('.login-mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    $('#loginModeAuto').style.display = btn.dataset.mode === 'auto' ? 'block' : 'none';
+    $('#loginModeCookie').style.display = btn.dataset.mode === 'cookie' ? 'block' : 'none';
+  });
+});
+
+// ---------- Socket.io ----------
+const socket = io();
+const socketStatus = $('#socketStatus');
+socket.on('connect', () => { socketStatus.textContent = '● connected'; socketStatus.className = 'pill ok'; });
+socket.on('disconnect', () => { socketStatus.textContent = '● disconnected'; socketStatus.className = 'pill bad'; });
+
+let accountsCache = [];
+let tasksCache = {};
+let currentBatchId = null;
+
+socket.on('accounts:update', (accs) => { accountsCache = accs; renderAccounts(); renderDashboardStats(); fillAccountSelects(); });
+socket.on('queue:stats', (stats) => {
+  $('#queueStat').textContent = `queue: ${stats.running}/${stats.concurrency} (+${stats.waiting} waiting)`;
+  $('#queueDetail').textContent = `running: ${stats.running} · waiting: ${stats.waiting} · concurrency: ${stats.concurrency}`;
+});
+socket.on('task:update', (task) => {
+  tasksCache[task.id] = task;
+  renderRecentTasks();
+  renderAllTasks();
+  if (task.batchId === currentBatchId) renderBulkTasks();
+  renderDashboardStats();
+});
+socket.on('bulk:progress', ({ batchId, completed, total, percent }) => {
+  if (batchId !== currentBatchId) return;
+  $('#bulkPercentLabel').textContent = percent + '%';
+  $('#bulkProgressBar').style.width = percent + '%';
+});
+socket.on('cctv:frame', ({ accountId, data }) => {
+  if (accountId !== currentCctvAccount) return;
+  $('#cctvImg').src = 'data:image/jpeg;base64,' + data;
+  $('#cctvOverlay').textContent = 'LIVE · ' + new Date().toLocaleTimeString();
+});
+
+// ---------- Rendering ----------
+function statusBadge(status) { return `<span class="badge ${status}">${status}</span>`; }
+
+function renderAccounts() {
+  const body = $('#accountsBody');
+  body.innerHTML = accountsCache.map(a => `
+    <tr>
+      <td>${a.label || '-'}</td>
+      <td>${a.email || '-'}</td>
+      <td>${a.method || '-'}</td>
+      <td>${statusBadge(a.status)}</td>
+      <td>${statusBadge(a.health)}</td>
+      <td>${(a.quotaUsed||0)}/${a.quota||0}</td>
+      <td>${a.lastUsed ? new Date(a.lastUsed).toLocaleString() : '-'}</td>
+      <td>
+        <button class="btn ghost small" onclick="exportCookie('${a.id}')">Export Cookie</button>
+        <button class="btn ghost small" onclick="deleteAccount('${a.id}')">Hapus</button>
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="8" class="muted">Belum ada akun. Tambahkan di atas.</td></tr>`;
+}
+
+function fillAccountSelects() {
+  const options = accountsCache.map(a => `<option value="${a.id}">${a.label} (${a.status})</option>`).join('');
+  $('#cctvAccountSelect').innerHTML = options || '<option value="">(belum ada akun)</option>';
+  $('#bulkAccountSelect').innerHTML = '<option value="">— Rotasi Otomatis —</option>' + options;
+  if (!currentCctvAccount && accountsCache[0]) currentCctvAccount = accountsCache[0].id;
+}
+
+function renderDashboardStats() {
+  $('#statAccounts').textContent = accountsCache.length;
+  $('#statHealthy').textContent = accountsCache.filter(a => a.health === 'healthy').length;
+  const all = Object.values(tasksCache);
+  $('#statRunning').textContent = all.filter(t => t.status === 'running' || t.status === 'queued').length;
+  $('#statDone').textContent = all.filter(t => t.status === 'done').length;
+}
+
+function renderRecentTasks() {
+  const all = Object.values(tasksCache).sort((a,b) => b.createdAt - a.createdAt).slice(0, 10);
+  $('#recentTasksBody').innerHTML = all.map(t => `
+    <tr>
+      <td>${escapeHtml((t.prompt||'').slice(0,60))}</td>
+      <td>${accLabel(t.accountId)}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td><div class="progress" style="width:100px;"><div style="width:${t.progress||0}%"></div></div></td>
+      <td class="small muted">${new Date(t.createdAt).toLocaleTimeString()}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="5" class="muted">Belum ada task.</td></tr>`;
+}
+
+function renderAllTasks() {
+  const all = Object.values(tasksCache).sort((a,b) => b.createdAt - a.createdAt);
+  $('#allTasksBody').innerHTML = all.map(t => `
+    <tr>
+      <td>${escapeHtml((t.prompt||'').slice(0,60))}</td>
+      <td>${accLabel(t.accountId)}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td><div class="progress" style="width:100px;"><div style="width:${t.progress||0}%"></div></div></td>
+      <td class="small">${(t.mediaFiles||[]).length} file</td>
+      <td>
+        <button class="btn ghost small" onclick="downloadTaskJson('${t.id}')">JSON</button>
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="6" class="muted">Belum ada task.</td></tr>`;
+}
+
+function renderBulkTasks() {
+  const batchTasks = Object.values(tasksCache).filter(t => t.batchId === currentBatchId).sort((a,b)=>a.createdAt-b.createdAt);
+  $('#bulkTasksBody').innerHTML = batchTasks.map((t,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml((t.prompt||'').slice(0,50))}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td><div class="progress" style="width:90px;"><div style="width:${t.progress||0}%"></div></div></td>
+      <td>${accLabel(t.accountId)}</td>
+      <td><button class="btn ghost small" onclick="downloadTaskJson('${t.id}')">JSON</button></td>
+    </tr>
+  `).join('');
+}
+
+function accLabel(id) {
+  const a = accountsCache.find(x => x.id === id);
+  return a ? a.label : (id ? id.slice(0,8) : '-');
+}
+function escapeHtml(s='') { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---------- Accounts actions ----------
+window.exportCookie = (id) => {
+  const token = localStorage.getItem('adminToken');
+  const url = `/api/v1/accounts/${id}/export-cookie` + (token ? `?token=${encodeURIComponent(token)}` : '');
+  window.open(url, '_blank');
+};
+window.deleteAccount = async (id) => {
+  if (!confirm('Hapus akun ini?')) return;
+  await api(`/api/v1/accounts/${id}`, { method: 'DELETE' });
+};
+window.downloadTaskJson = (id) => {
+  const token = localStorage.getItem('adminToken');
+  const url = `/api/v1/task/export/${id}` + (token ? `?token=${encodeURIComponent(token)}` : '');
+  window.open(url, '_blank');
+};
+
+$('#btnAutoLogin').addEventListener('click', async () => {
+  const id = crypto.randomUUID();
+  const label = $('#autoLabel').value || $('#autoEmail').value;
+  const email = $('#autoEmail').value;
+  const password = $('#autoPassword').value;
+  if (!email || !password) return alert('Email & password wajib diisi');
+  $('#loginResult').textContent = 'Memproses login otomatis... pantau di tab CCTV Monitor.';
+  const result = await api(`/api/v1/accounts/${id}/login/auto`, { method: 'POST', body: JSON.stringify({ email, password, label }) });
+  $('#loginResult').textContent = result.ok ? '✅ Login berhasil & cookie tersimpan.' : ('⚠️ ' + (result.error || 'Perlu intervensi manual, cek CCTV Monitor.'));
+  currentCctvAccount = id;
+  $('#cctvAccountSelect').value = id;
+});
+
+$('#btnCookieLogin').addEventListener('click', async () => {
+  const id = crypto.randomUUID();
+  const label = $('#cookieLabel').value;
+  const email = $('#cookieEmail').value;
+  const file = $('#cookieFile').files[0];
+  $('#loginResult').textContent = 'Memverifikasi cookie...';
+
+  let result;
+  if (file) {
+    const fd = new FormData();
+    fd.append('cookieFile', file);
+    fd.append('label', label);
+    fd.append('email', email);
+    result = await api(`/api/v1/accounts/${id}/login/cookie`, { method: 'POST', body: fd });
+  } else {
+    const cookiesText = $('#cookieText').value;
+    if (!cookiesText.trim()) return alert('Paste JSON cookie atau upload file.');
+    result = await api(`/api/v1/accounts/${id}/login/cookie`, { method: 'POST', body: JSON.stringify({ cookies: cookiesText, label, email }) });
+  }
+  $('#loginResult').textContent = result.ok ? '✅ Cookie valid, akun berhasil login.' : ('⚠️ ' + (result.error || 'Gagal.'));
+});
+
+// ---------- CCTV ----------
+let currentCctvAccount = null;
+$('#cctvAccountSelect').addEventListener('change', (e) => {
+  if (currentCctvAccount) socket.emit('unsubscribe:cctv', currentCctvAccount);
+  currentCctvAccount = e.target.value;
+  socket.emit('subscribe:cctv', currentCctvAccount);
+});
+
+$('#btnCctvStart').addEventListener('click', async () => {
+  if (!currentCctvAccount) return alert('Pilih akun dulu');
+  await api(`/api/v1/cctv/${currentCctvAccount}/start`, { method: 'POST' });
+  socket.emit('subscribe:cctv', currentCctvAccount);
+});
+$('#btnCctvStop').addEventListener('click', async () => {
+  if (!currentCctvAccount) return;
+  await api(`/api/v1/cctv/${currentCctvAccount}/stop`, { method: 'POST' });
+});
+
+function cctvLog(msg) {
+  const el = $('#cctvLog');
+  el.innerHTML = `<div>${new Date().toLocaleTimeString()} — ${escapeHtml(msg)}</div>` + el.innerHTML;
+}
+
+$('#cctvImg').addEventListener('click', async (e) => {
+  if (!currentCctvAccount) return;
+  const rect = e.target.getBoundingClientRect();
+  const scaleX = 1024 / rect.width;
+  const scaleY = 640 / rect.height;
+  const x = Math.round((e.clientX - rect.left) * scaleX);
+  const y = Math.round((e.clientY - rect.top) * scaleY);
+  await api(`/api/v1/cctv/${currentCctvAccount}/input`, { method: 'POST', body: JSON.stringify({ type: 'click', x, y }) });
+  cctvLog(`klik di (${x}, ${y})`);
+});
+
+$('#btnCctvType').addEventListener('click', async () => {
+  if (!currentCctvAccount) return;
+  const text = $('#cctvTypeText').value;
+  await api(`/api/v1/cctv/${currentCctvAccount}/input`, { method: 'POST', body: JSON.stringify({ type: 'type', text }) });
+  cctvLog('ketik: ' + text);
+});
+$('#btnCctvGoto').addEventListener('click', async () => {
+  if (!currentCctvAccount) return;
+  const text = $('#cctvGotoUrl').value;
+  await api(`/api/v1/cctv/${currentCctvAccount}/input`, { method: 'POST', body: JSON.stringify({ type: 'goto', text }) });
+  cctvLog('navigasi: ' + text);
+});
+$('#btnCctvEnter').addEventListener('click', () => sendKey('Enter'));
+$('#btnCctvEsc').addEventListener('click', () => sendKey('Escape'));
+$('#btnCctvTab').addEventListener('click', () => sendKey('Tab'));
+async function sendKey(key) {
+  if (!currentCctvAccount) return;
+  await api(`/api/v1/cctv/${currentCctvAccount}/input`, { method: 'POST', body: JSON.stringify({ type: 'key', key }) });
+  cctvLog('key: ' + key);
+}
+
+// ---------- Bulk Generator ----------
+$('#bulkPrompts').addEventListener('input', updateBulkCount);
+$('#bulkFile').addEventListener('change', updateBulkCount);
+function updateBulkCount() {
+  const lines = $('#bulkPrompts').value.split('\n').map(l => l.trim()).filter(Boolean);
+  const fileNote = $('#bulkFile').files[0] ? ` + file: ${$('#bulkFile').files[0].name}` : '';
+  $('#bulkCount').textContent = `${lines.length} prompt siap (maks 100)${fileNote}`;
+}
+
+$('#btnBulkSubmit').addEventListener('click', async () => {
+  const accountId = $('#bulkAccountSelect').value;
+  const file = $('#bulkFile').files[0];
+  let result;
+  if (file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (accountId) fd.append('accountId', accountId);
+    result = await api('/api/v1/flow/bulk-generate', { method: 'POST', body: fd });
+  } else {
+    const prompts = $('#bulkPrompts').value.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 100);
+    if (prompts.length === 0) return alert('Masukkan minimal 1 prompt.');
+    result = await api('/api/v1/flow/bulk-generate', { method: 'POST', body: JSON.stringify({ prompts, accountId: accountId || undefined }) });
+  }
+  if (!result.ok) return alert('Gagal: ' + result.error);
+  currentBatchId = result.batchId;
+  $('#bulkProgressCard').style.display = 'block';
+  $('#bulkBatchId').textContent = '#' + result.batchId.slice(0, 8);
+  $('#bulkProgressBar').style.width = '0%';
+  $('#bulkPercentLabel').textContent = '0%';
+  pollBatch();
+});
+
+async function pollBatch() {
+  if (!currentBatchId) return;
+  const res = await api(`/api/v1/batch/${currentBatchId}`);
+  if (res.ok) {
+    res.tasks.forEach(t => tasksCache[t.id] = t);
+    renderBulkTasks();
+  }
+}
+
+// ---------- Exports ----------
+$('#btnExportAllJson').addEventListener('click', () => {
+  const token = localStorage.getItem('adminToken');
+  window.open('/api/v1/task/export-all/json' + (token ? `?token=${encodeURIComponent(token)}` : ''), '_blank');
+});
+$('#btnExportAllMedia').addEventListener('click', () => {
+  const token = localStorage.getItem('adminToken');
+  window.open('/api/v1/task/export-all/media' + (token ? `?token=${encodeURIComponent(token)}` : ''), '_blank');
+});
+$('#btnRefreshTasks').addEventListener('click', loadAllTasks);
+
+async function loadAllTasks() {
+  const res = await api('/api/v1/task/list');
+  if (res.ok) {
+    res.tasks.forEach(t => tasksCache[t.id] = t);
+    renderAllTasks();
+    renderRecentTasks();
+    renderDashboardStats();
+  }
+}
+
+// ---------- Init ----------
+async function init() {
+  const accRes = await api('/api/v1/accounts');
+  if (accRes.ok) { accountsCache = accRes.accounts; renderAccounts(); fillAccountSelects(); renderDashboardStats(); }
+  await loadAllTasks();
+}
+init();
+</script>
+</body>
+</html>
