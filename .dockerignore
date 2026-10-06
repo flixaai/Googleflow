@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.env
+sessions
+*.log
+npm-debug.log*
+src
+tsconfig.json
+next.config.ts
+next-env.d.ts
+drizzle.config.json
+postcss.config.mjs
+eslint.config.mjs
+DEPLOY.md
+README.md
